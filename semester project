@@ -1,0 +1,575 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, Button, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createDrawerNavigator } from '@react-navigation/drawer';
+import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
+import { getDatabase, ref, get, set, remove, update } from 'firebase/database'; // Firebase Realtime Database imports
+import { initializeApp } from 'firebase/app';
+
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyA4kga1yE2wwsH0Bz_2NoL6j7zrvAT3HTw",
+  authDomain: "protecvision-8bd21.firebaseapp.com",
+  databaseURL: "https://protecvision-8bd21-default-rtdb.firebaseio.com",
+  projectId: "protecvision-8bd21",
+  storageBucket: "protecvision-8bd21.firebasestorage.app",
+  messagingSenderId: "230077409454",
+  appId: "1:230077409454:web:77b657a5819c195720a53f",
+  measurementId: "G-BLT8194EWY"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// Drawer Screen
+function DashboardScreen({ navigation }) {
+  const [searchQuery, setSearchQuery] = useState(''); // State for search query
+  const [data, setData] = useState([]); // State for the data to be searched
+
+  // Example data to search through (replace with your actual data)
+  const exampleData = [
+    { id: 1, name: 'User 1' },
+    { id: 2, name: 'User 2' },
+    { id: 3, name: 'Location 1' },
+    { id: 4, name: 'Location 2' },
+    // Add more items as needed
+  ];
+
+  // Update the data state with example data (or fetch from your source)
+  useEffect(() => {
+    setData(exampleData);
+  }, []);
+
+  // Filtered data based on search query
+  const filteredData = data.filter(item =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Welcome to the Dashboard</Text>
+      <Text style={styles.dashboardText}>You are now logged in!</Text>
+
+      {/* Search Input */}
+      <TextInput
+        style={styles.searchInput}
+        placeholder="Search..."
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+      />
+
+      {/* Display filtered data */}
+      {filteredData.map(item => (
+        <TouchableOpacity key={item.id} onPress={() => navigation.navigate(item.name)}>
+          <Text style={styles.itemText}>{item.name}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+// User Screen with CRUD operations
+function UserScreen() {
+  const [userData, setUserData] = useState([]);
+  const [newUser, setNewUser] = useState({ email: '', name: '', role: '', status: '' });
+  const [editUserId, setEditUserId] = useState(null);
+
+  useEffect(() => {
+    const userRef = ref(db, 'User'); // Reference to the user data in Firebase
+    get(userRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const users = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        setUserData(users);
+      } else {
+        console.log("No data available");
+      }
+    }).catch((error) => {
+      console.error(error);
+    });
+  }, []);
+
+  const handleAddUser = () => {
+    if (!newUser.email || !newUser.name || !newUser.role || !newUser.status) {
+      alert('Please fill in all fields');
+      return;
+    }
+    const userRef = ref(db, 'User/' + newUser.email); // Use email as unique key
+    set(userRef, newUser).then(() => {
+      setUserData([...userData, { id: newUser.email, ...newUser }]);
+      setNewUser({ email: '', name: '', role: '', status: '' });
+    }).catch((error) => {
+      console.error(error);
+    });
+  };
+
+  const handleDeleteUser = (id) => {
+    const userRef = ref(db, 'User/' + id);
+    remove(userRef).then(() => {
+      setUserData(userData.filter(user => user.id !== id));
+    }).catch((error) => {
+      console.error(error);
+    });
+  };
+
+  const handleEditUser = (id) => {
+    const user = userData.find(user => user.id === id);
+    setNewUser({ email: user.id, name: user.name, role: user.role, status: user.status });
+    setEditUserId(id);
+  };
+
+  const handleUpdateUser = () => {
+    if (!newUser.name || !newUser.role || !newUser.status) {
+      alert('Please fill in all fields');
+      return;
+    }
+    const userRef = ref(db, 'User/' + editUserId);
+    update(userRef, { name: newUser.name, role: newUser.role, status: newUser.status }).then(() => {
+      setUserData(userData.map(user => user.id === editUserId ? { id: user.id, ...newUser } : user));
+      setNewUser({ email: '', name: '', role: '', status: '' });
+      setEditUserId(null);
+    }).catch((error) => {
+      console.error(error);
+    });
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>User Information</Text>
+
+      {/* Add/Edit User Form */}
+      <TextInput
+        style={styles.input}
+        placeholder="Email"
+        value={newUser.email}
+        onChangeText={(text) => setNewUser({ ...newUser, email: text })}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Name"
+        value={newUser.name}
+        onChangeText={(text) => setNewUser({ ...newUser, name: text })}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Role"
+        value={newUser.role}
+        onChangeText={(text) => setNewUser({ ...newUser, role: text })}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Status"
+        value={newUser.status}
+        onChangeText={(text) => setNewUser({ ...newUser, status: text })}
+      />
+      <Button
+        title={editUserId ? 'Update User' : 'Add User'}
+        onPress={editUserId ? handleUpdateUser : handleAddUser}
+      />
+
+      {/* Display Users */}
+      <FlatList
+        data={userData}
+        renderItem={({ item }) => (
+          <View style={styles.userItem}>
+            <Text>Email: {item.email}</Text>
+            <Text>Name: {item.name}</Text>
+            <Text>Role: {item.role}</Text>
+            <Text>Status: {item.status}</Text>
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity onPress={() => handleEditUser(item.id)}>
+                <Text style={styles.editButton}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDeleteUser(item.id)}>
+                <Text style={styles.deleteButton}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+        keyExtractor={item => item.id}
+      />
+    </View>
+  );
+}
+
+// Locations Screen
+function LocationsScreen() {
+  const [locationsData, setLocationsData] = useState(null);
+
+  useEffect(() => {
+    const locationsRef = ref(db, 'locations'); // Reference to locations data in Firebase
+    get(locationsRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        setLocationsData(snapshot.val());
+      } else {
+        console.log("No data available");
+      }
+    }).catch((error) => {
+      console.error(error);
+    });
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Locations</Text>
+      {locationsData ? (
+        Object.keys(locationsData).map(locationKey => (
+          <View key={locationKey}>
+            <Text>Name: {locationsData[locationKey].name}</Text>
+            <Text>Cameras: {locationsData[locationKey].cameras}</Text>
+            <Text>Last Updated: {locationsData[locationKey].last_updated}</Text>
+          </View>
+        ))
+      ) : (
+        <Text>Loading...</Text>
+      )}
+    </View>
+  );
+}
+
+// Settings Screen with Theme Toggle
+function SettingsScreen() {
+  const [settingsData, setSettingsData] = useState(null);
+  const [isDarkTheme, setIsDarkTheme] = useState(false); // Track the current theme
+
+  useEffect(() => {
+    const settingsRef = ref(db, 'settings'); // Reference to settings data in Firebase
+    get(settingsRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        setSettingsData(snapshot.val());
+      } else {
+        console.log("No data available");
+      }
+    }).catch((error) => {
+      console.error(error);
+    });
+  }, []);
+
+  // Toggle theme between dark and light
+  const toggleTheme = () => {
+    setIsDarkTheme(!isDarkTheme);
+  };
+
+  // Dynamic styles based on theme
+  const themeStyles = isDarkTheme ? styles.dark : styles.light;
+
+  return (
+    <View style={[styles.container, themeStyles.container]}>
+      <Text style={[styles.title, themeStyles.title]}>Settings</Text>
+      {settingsData ? (
+        <>
+          <Text style={themeStyles.text}>Alert Sound: {settingsData.alert_sound}</Text>
+          <Text style={themeStyles.text}>Notifications Enabled: {settingsData.notification_enabled ? 'Yes' : 'No'}</Text>
+          <Text style={themeStyles.text}>Theme: {settingsData.theme}</Text>
+        </>
+      ) : (
+        <Text style={themeStyles.text}>Loading...</Text>
+      )}
+      <TouchableOpacity onPress={toggleTheme} style={styles.themeButton}>
+        <Text style={themeStyles.text}>{`Switch to ${isDarkTheme ? 'Light' : 'Dark'} Theme`}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// Suspicious Behaviours Screen
+function SuspiciousBehavioursScreen() {
+  const [suspiciousData, setSuspiciousData] = useState(null);
+
+  useEffect(() => {
+    const suspiciousRef = ref(db, 'suspecious-_behaviours'); // Reference to suspicious behaviours data in Firebase
+    get(suspiciousRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        setSuspiciousData(snapshot.val());
+      } else {
+        console.log("No data available");
+      }
+    }).catch((error) => {
+      console.error(error);
+    });
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Suspicious Behaviours</Text>
+      {suspiciousData ? (
+        Object.keys(suspiciousData).map(behaviorKey => (
+          <View key={behaviorKey}>
+            <Text>Description: {suspiciousData[behaviorKey].description}</Text>
+            <Text>Camera ID: {suspiciousData[behaviorKey].camera_id}</Text>
+            <Text>Type: {suspiciousData[behaviorKey].type}</Text>
+          </View>
+        ))
+      ) : (
+        <Text>Loading...</Text>
+      )}
+    </View>
+  );
+}
+
+// Exam Info Screen
+function ExamInfoScreen() {
+  const [examData, setExamData] = useState(null);
+
+  useEffect(() => {
+    const examRef = ref(db, 'tbl-exam'); // Reference to exam data in Firebase
+    get(examRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        setExamData(snapshot.val());
+      } else {
+        console.log("No data available");
+      }
+    }).catch((error) => {
+      console.error(error);
+    });
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Exam Information</Text>
+      {examData ? (
+        <>
+          <Text>Exam Name: {examData.examName}</Text>
+          <Text>Exam Date: {examData.examDate}</Text>
+          <Text>Exam Type: {examData.examType}</Text>
+        </>
+      ) : (
+        <Text>Loading...</Text>
+      )}
+    </View>
+  );
+}
+
+// Custom Drawer Content
+function CustomDrawerContent(props) {
+  return (
+    <DrawerContentScrollView {...props}>
+      <DrawerItemList {...props} />
+    </DrawerContentScrollView>
+  );
+}
+
+const Drawer = createDrawerNavigator();
+
+export default function App() {
+  const [isLogin, setIsLogin] = useState(true); // Switch between login and signup
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Track authentication status
+
+  const handleLogin = () => {
+    console.log('Logging in with', email, password);
+    setIsAuthenticated(true);
+  };
+
+  const handleSignup = () => {
+    console.log('Signing up with', email, password);
+  };
+
+  if (isAuthenticated) {
+    return (
+      <NavigationContainer>
+        <Drawer.Navigator drawerContent={props => <CustomDrawerContent {...props} />}>
+          <Drawer.Screen name="Dashboard" component={DashboardScreen} />
+          <Drawer.Screen name="User" component={UserScreen} />
+          <Drawer.Screen name="Locations" component={LocationsScreen} />
+          <Drawer.Screen name="Settings" component={SettingsScreen} />
+          <Drawer.Screen name="SuspiciousBehaviours" component={SuspiciousBehavioursScreen} />
+          <Drawer.Screen name="ExamInfo" component={ExamInfoScreen} />
+        </Drawer.Navigator>
+      </NavigationContainer>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>{isLogin ? 'Login' : 'Sign Up'}</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+      />
+      <Button
+        title="Login"
+        onPress={handleLogin}
+        style={styles.button}
+      />
+      <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+        <Text>{isLogin ? 'Switch to Sign Up' : 'Switch to Login'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f4f7fc',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 24,
+    color: '#333',
+  },
+  input: {
+    height: 50,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 16,
+    paddingLeft: 16,
+    width: '100%',
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  button: {
+    backgroundColor: '#007bff',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signupButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  userItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  editButton: {
+    color: '#007bff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  deleteButton: {
+    color: '#e74c3c',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  dashboardText: {
+    fontSize: 18,
+    marginVertical: 20,
+    color: '#555',
+  },
+  light: {
+    container: {
+      backgroundColor: '#fff',
+    },
+    title: {
+      color: '#333',
+    },
+    text: {
+      color: '#333',
+    },
+  },
+  dark: {
+    container: {
+      backgroundColor: '#333',
+    },
+    title: {
+      color: '#fff',
+    },
+    text: {
+      color: '#fff',
+    },
+  },
+  // Custom Drawer Styles
+  drawerContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 20,
+  },
+  drawerItem: {
+    marginBottom: 12,
+  },
+  drawerItemText: {
+    fontSize: 18,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  drawerActiveItem: {
+    backgroundColor: '#007bff',
+    borderRadius: 8,
+  },
+  drawerActiveItemText: {
+    color: '#fff',
+  },
+  buttonSpacing: {
+    marginBottom: 10,
+  },
+  dashboardButton: {
+    backgroundColor: '#007bff', // Blue color for buttons
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginBottom: 10, // Gap between buttons
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeButton: {
+    backgroundColor: '#007bff', // Blue background for the theme button
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 20, // Add some space above the button
+    alignItems: 'center',
+  },
+  searchInput: {
+    height: 50,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 16,
+    paddingLeft: 16,
+    width: '100%',
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  itemText: {
+    fontSize: 18,
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+});
